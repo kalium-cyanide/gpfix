@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package data;
+
+message deltaS {
+    uint64 timeFrom = 1;
+    uint64 timeTo = 2;
+    float deltaX = 3;
+    float deltaY = 4;
+    float heading = 5;
+}
+
+message ack {
+    uint64 time = 1;
+    float lat = 2;
+    float lon = 3;
+    float heading = 4;
+    float speed = 5;
+}
