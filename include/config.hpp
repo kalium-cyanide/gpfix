@@ -5,20 +5,37 @@
 #define config__ static constexpr
 
 struct PinConfig {
-    config__ int32_t SDA_PIN = 21;
-    config__ int32_t SCL_PIN = 22;
-    config__ int32_t CAN_TX_PIN = 4;
-    config__ int32_t CAN_RX_PIN = 5;
-    config__ int32_t LED_PIN = 13;
+
+    config__ int32_t SDA_PIN = 8;
+    config__ int32_t SCL_PIN = 9;
+
+    config__ int32_t CAN_TX_PIN = 5;
+    config__ int32_t CAN_RX_PIN = 4;
+
+    config__ int32_t BTN1_PIN = 6;
+    config__ int32_t BTN2_PIN = 7;
+
+    config__ int32_t SD_MOSI = 11;
+    config__ int32_t SD_MISO = 13;
+    config__ int32_t SD_SCK = 12;
+    config__ int32_t SD_CS = 10;
+
+    config__ int32_t LED_PIN = 2;
 };
 
 struct IMUConfig {
-    config__ uint8_t MPU_ADDR = 0x68;
+    config__ uint8_t BMI160_ADDR = 0x68;
     config__ uint32_t SAMPLE_RATE_HZ = 200;
-    config__ uint8_t ACCEL_RANGE = 2;
-    config__ uint8_t GYRO_RANGE = 1;
-    config__ float ACCEL_SCALE = 9.81f / 16384.0f;
-    config__ float GYRO_SCALE = 1.0f / 65.5f;
+
+    config__ uint8_t ACC_CONF = 0x29;
+    config__ uint8_t ACC_RANGE = 0x05;
+
+    config__ uint8_t GYR_CONF = 0x29;
+    config__ uint8_t GYR_RANGE = 0x02;
+
+    config__ float ACCEL_SCALE = 9.81f / 8192.0f;
+    config__ float GYRO_SCALE = 1.0f / 65.6f;
+
     config__ uint32_t CALIBRATION_SAMPLES = 500;
 };
 
@@ -36,13 +53,30 @@ struct CANConfig {
     config__ uint32_t BAUD_RATE = 500000;
     config__ uint16_t SPEED_PID = 0x0D;
     config__ uint16_t RPM_PID = 0x0C;
+    config__ uint32_t POLL_INTERVAL_MS = 50;
+    config__ uint32_t TX_TIMEOUT_MS = 100;
+    config__ uint32_t RX_TIMEOUT_MS = 100;
+};
+
+struct SDConfig {
+    config__ uint32_t SPI_FREQ = 20000000;
+    config__ uint32_t QUEUE_SIZE = 512;
+    config__ uint32_t WRITE_BATCH = 32;
+    config__ uint32_t FLUSH_INTERVAL = 200;
+    config__ uint32_t WRITER_STACK = 6144;
+    config__ uint32_t WRITER_PRIO = 1;
+    config__ uint8_t WRITER_CORE = 0;
+    config__ uint64_t MIN_FREE_BYTES = 1024ULL * 1024;
 };
 
 struct TaskConfig {
     config__ uint8_t IMU_CORE = 1;
     config__ uint8_t BLE_CORE = 0;
-    config__ uint32_t IMU_STACK = 4096;
+    config__ uint8_t CAN_CORE = 0;
+    config__ uint32_t IMU_STACK = 8192;
     config__ uint32_t BLE_STACK = 4096;
+    config__ uint32_t CAN_STACK = 4096;
     config__ uint32_t IMU_PRIO = 10;
     config__ uint32_t BLE_PRIO = 2;
+    config__ uint32_t CAN_PRIO = 3;
 };

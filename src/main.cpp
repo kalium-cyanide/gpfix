@@ -2,6 +2,7 @@
 #include "config.hpp"
 #include "esp_timer.h"
 #include "nvs_flash.h"
+#include "obd2.hpp"
 #include "tracker.hpp"
 
 SemaphoreHandle_t tracker_sem = NULL;
@@ -31,6 +32,32 @@ void bluetoothSetup(void*)
             instance.loop();
 
             vTaskDelayUntil(&from, duration);
+        }
+    }
+    vTaskDelete(NULL);
+}
+
+void obd2Setup(void*)
+{
+    {
+        OBD2 obd2;
+        while (!obd2.begin()) {
+            ESP_LOGW("OBD2", "TWAI init failed, retrying in 1s...");
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+
+        auto from = xTaskGetTickCount();
+        constexpr auto interval = pdMS_TO_TICKS(CANConfig::POLL_INTERVAL_MS);
+
+        while (true) {
+            CANData speed = obd2.readSpeed();
+            if (speed.valid) {
+                uint8_t next_idx = global_context.active_can_idx.load(std::memory_order_acquire) ^ 1;
+                global_context.can_buffer[next_idx] = speed;
+                global_context.active_can_idx.store(next_idx, std::memory_order_release);
+            }
+
+            vTaskDelayUntil(&from, interval);
         }
     }
     vTaskDelete(NULL);
@@ -72,6 +99,7 @@ void setup()
     }
 
     xTaskCreatePinnedToCore(bluetoothSetup, "bluetooth", TaskConfig::BLE_STACK, nullptr, TaskConfig::BLE_PRIO, nullptr, TaskConfig::BLE_CORE);
+    xTaskCreatePinnedToCore(obd2Setup, "obd2", TaskConfig::CAN_STACK, nullptr, TaskConfig::CAN_PRIO, nullptr, TaskConfig::CAN_CORE);
     xTaskCreatePinnedToCore(trackerSetup, "tracker", TaskConfig::IMU_STACK, nullptr, TaskConfig::IMU_PRIO, nullptr, TaskConfig::IMU_CORE);
 }
 

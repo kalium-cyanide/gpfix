@@ -46,10 +46,9 @@ public:
         data_ack msg = data_ack_init_zero;
         pb_istream_t stream = pb_istream_from_buffer(raw, len);
         if (pb_decode(&stream, data_ack_fields, &msg)) {
-            GPSData gps {};
+            GPSData gps { };
             gps.lat = msg.lat;
             gps.lon = msg.lon;
-            gps.timestamp_us = static_cast<uint64_t>(esp_timer_get_time());
             gps.valid = true;
 
             uint8_t next_idx = global_context.active_gps_idx.load(std::memory_order_acquire) ^ 1;
@@ -84,14 +83,12 @@ struct Bluetooth {
 
         delta_char = service->createCharacteristic(
             BTConfig::DELTA_CHAR_UUID,
-            BLECharacteristic::PROPERTY_NOTIFY
-        );
+            BLECharacteristic::PROPERTY_NOTIFY);
         delta_char->addDescriptor(new BLE2902());
 
         ack_char = service->createCharacteristic(
             BTConfig::ACK_CHAR_UUID,
-            BLECharacteristic::PROPERTY_WRITE
-        );
+            BLECharacteristic::PROPERTY_WRITE);
         ack_char->setCallbacks(&ack_cb);
 
         service->start();

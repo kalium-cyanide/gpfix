@@ -33,9 +33,6 @@ struct CANData {
 struct GPSData {
     double lat;
     double lon;
-    float heading_deg;
-    float speed_mps;
-    uint64_t timestamp_us;
     bool valid;
 };
 
@@ -44,7 +41,7 @@ struct DeltaS {
     uint64_t time_to_us;
     float dx_m;
     float dy_m;
-    float heading_deg;
+    float yaw;
 };
 
 #pragma pack(pop)
@@ -52,9 +49,11 @@ struct DeltaS {
 struct Context {
     DeltaS delta_buffer[2];
     GPSData gps_buffer[2];
+    CANData can_buffer[2];
 
     std::atomic<uint8_t> active_delta_idx { 0 };
     std::atomic<uint8_t> active_gps_idx { 0 };
+    std::atomic<uint8_t> active_can_idx { 0 };
 };
 
 extern Context global_context;
