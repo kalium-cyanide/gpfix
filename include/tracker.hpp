@@ -3,8 +3,8 @@
 #include "config.hpp"
 #include "data.hpp"
 #include "esp_timer.h"
+#include "imodel.hpp"
 #include "imu.hpp"
-#include "model.hpp"
 #include <MadgwickAHRS.h>
 
 struct PT1Filter {
@@ -30,7 +30,7 @@ struct PT1Filter {
 
 struct Tracker {
     IMU imu;
-    Model model;
+    IModel* model;
     Madgwick filter;
 
     float acc_dx = 0.0f;
@@ -38,10 +38,10 @@ struct Tracker {
     uint64_t window_start = 0;
     uint64_t window_us = BTConfig::NOTIFY_INTERVAL_MS * 1000ULL;
     uint8_t last_gps_idx = 255;
-    uint8_t last_can_idx = 255;
-    CANData latest_can { };
+    uint8_t last_speed_idx = 255;
 
-    Tracker(float frequency)
+    Tracker(IModel* m, float frequency)
+        : model(m)
     {
         imu.begin();
         imu.calibrate();
@@ -56,35 +56,36 @@ struct Tracker {
         filter.updateIMU(imu_data.gyro_x, imu_data.gyro_y, imu_data.gyro_z,
             imu_data.acc_x, imu_data.acc_y, imu_data.acc_z);
 
-        uint8_t can_idx = global_context.active_can_idx.load(std::memory_order_acquire);
-        if (can_idx != last_can_idx) {
-            last_can_idx = can_idx;
-            latest_can = global_context.can_buffer[can_idx];
+        // Speed (CAN или датчик Холла) — forward new data to model
+        uint8_t speed_idx = global_context.active_speed_idx.load(std::memory_order_acquire);
+        if (speed_idx != last_speed_idx) {
+            last_speed_idx = speed_idx;
+            model->onSpeed(global_context.speed_buffer[speed_idx]);
         }
 
+        // GPS — forward new data to model
         uint8_t gps_idx = global_context.active_gps_idx.load(std::memory_order_acquire);
         if (gps_idx != last_gps_idx) {
             last_gps_idx = gps_idx;
             GPSData gps = global_context.gps_buffer[gps_idx];
             if (gps.valid) {
-                model.calibrate(gps, imu_data, latest_can);
+                model->onGPS(gps);
             }
         }
 
-        model.resetYaw(filter.getYaw());
-
-        DeltaS ds = model.update(imu_data, latest_can);
+        float yaw = filter.getYaw();
+        DeltaS ds = model->update(imu_data, yaw);
         acc_dx += ds.dx_m;
         acc_dy += ds.dy_m;
 
         uint64_t now = imu_data.timestamp_us;
         if (now - window_start >= window_us) {
-            DeltaS out { };
+            DeltaS out {};
             out.time_from_us = window_start;
             out.time_to_us = now;
             out.dx_m = acc_dx;
             out.dy_m = acc_dy;
-            out.yaw = model.getYaw();
+            out.yaw = ds.yaw;
 
             uint8_t next_delta_idx = global_context.active_delta_idx.load(std::memory_order_acquire) ^ 1;
             global_context.delta_buffer[next_delta_idx] = out;

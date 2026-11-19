@@ -87,9 +87,10 @@ struct IMU {
         }
 
         float n = static_cast<float>(IMUConfig::CALIBRATION_SAMPLES);
-        ax_off = (sax / n) * IMUConfig::ACCEL_SCALE;
-        ay_off = (say / n) * IMUConfig::ACCEL_SCALE;
-        az_off = (saz / n) * IMUConfig::ACCEL_SCALE - 9.81f;
+        // Не обнуляем акселерометр, чтобы сохранить истинный 3D-вектор гравитации для автовыравнивания
+        ax_off = 0.0f;
+        ay_off = 0.0f;
+        az_off = 0.0f;
         gx_off = (sgx / n) * IMUConfig::GYRO_SCALE;
         gy_off = (sgy / n) * IMUConfig::GYRO_SCALE;
         gz_off = (sgz / n) * IMUConfig::GYRO_SCALE;

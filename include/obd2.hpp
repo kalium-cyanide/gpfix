@@ -2,13 +2,14 @@
 
 #include "config.hpp"
 #include "data.hpp"
+#include "speed_source.hpp"
 #include <driver/twai.h>
 #include <esp_log.h>
 #include <esp_timer.h>
 
 static const char* OBD2_TAG = "OBD2";
 
-struct OBD2 {
+struct OBD2 : public ISpeedSource {
     bool initialized = false;
 
     static constexpr uint32_t REQUEST_ID = 0x7DF;
@@ -18,7 +19,7 @@ struct OBD2 {
     static constexpr uint8_t SERVICE_CURRENT_DATA = 0x01;
     static constexpr uint8_t SERVICE_RESPONSE_OFFSET = 0x40;
 
-    bool begin()
+    bool begin() override
     {
         twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(
             static_cast<gpio_num_t>(PinConfig::CAN_TX_PIN),
@@ -110,9 +111,9 @@ struct OBD2 {
         return false;
     }
 
-    CANData readSpeed()
+    SpeedData readSpeed() override
     {
-        CANData result = { };
+        SpeedData result = { };
         result.timestamp_us = static_cast<uint64_t>(esp_timer_get_time());
         result.valid = false;
 

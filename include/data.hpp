@@ -24,11 +24,13 @@ struct IMUData {
     uint64_t timestamp_us;
 };
 
-struct CANData {
+struct SpeedData {
     float speed_kmh;
     uint64_t timestamp_us;
     bool valid;
 };
+
+using CANData = SpeedData; // Совместимость со старым кодом
 
 struct GPSData {
     double lat;
@@ -49,11 +51,13 @@ struct DeltaS {
 struct Context {
     DeltaS delta_buffer[2];
     GPSData gps_buffer[2];
-    CANData can_buffer[2];
+    SpeedData speed_buffer[2];
+    #define can_buffer speed_buffer
 
     std::atomic<uint8_t> active_delta_idx { 0 };
     std::atomic<uint8_t> active_gps_idx { 0 };
-    std::atomic<uint8_t> active_can_idx { 0 };
+    std::atomic<uint8_t> active_speed_idx { 0 };
+    #define active_can_idx active_speed_idx
 };
 
 extern Context global_context;

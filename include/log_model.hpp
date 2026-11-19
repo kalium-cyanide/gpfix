@@ -185,15 +185,20 @@ struct LogModel : IModel {
         return ds;
     }
 
-    void onCAN(const CANData& can) override
+    void onSpeed(const SpeedData& speed) override
     {
-        if (isReady() && can.valid) {
+        if (isReady() && speed.valid) {
             LogEntry e = { };
-            e.type = LOG_CAN;
-            e.timestamp_us = can.timestamp_us;
-            e.can.speed_kmh = can.speed_kmh;
+            e.type = LOG_CAN; // сохраняем обратную совместимость бинарного формата логов
+            e.timestamp_us = speed.timestamp_us;
+            e.can.speed_kmh = speed.speed_kmh;
             enqueue(e);
         }
+    }
+
+    void onCAN(const CANData& can) override
+    {
+        onSpeed(can);
     }
 
     void onGPS(const GPSData& gps) override

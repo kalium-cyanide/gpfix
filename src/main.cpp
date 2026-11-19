@@ -1,8 +1,10 @@
+#include "bicycle_eskf.hpp"
 #include "bluetooth.hpp"
 #include "config.hpp"
+#include "device.hpp"
 #include "esp_timer.h"
+#include "log_model.hpp"
 #include "nvs_flash.h"
-#include "obd2.hpp"
 #include "tracker.hpp"
 
 SemaphoreHandle_t tracker_sem = NULL;
@@ -37,12 +39,12 @@ void bluetoothSetup(void*)
     vTaskDelete(NULL);
 }
 
-void obd2Setup(void*)
+void speedSetup(void* param)
 {
     {
-        OBD2 obd2;
-        while (!obd2.begin()) {
-            ESP_LOGW("OBD2", "TWAI init failed, retrying in 1s...");
+        ISpeedSource* sensor = static_cast<ISpeedSource*>(param);
+        while (!sensor->begin()) {
+            ESP_LOGW("SPEED", "Speed sensor init failed, retrying in 1s...");
             vTaskDelay(pdMS_TO_TICKS(1000));
         }
 
@@ -50,11 +52,11 @@ void obd2Setup(void*)
         constexpr auto interval = pdMS_TO_TICKS(CANConfig::POLL_INTERVAL_MS);
 
         while (true) {
-            CANData speed = obd2.readSpeed();
+            SpeedData speed = sensor->readSpeed();
             if (speed.valid) {
-                uint8_t next_idx = global_context.active_can_idx.load(std::memory_order_acquire) ^ 1;
-                global_context.can_buffer[next_idx] = speed;
-                global_context.active_can_idx.store(next_idx, std::memory_order_release);
+                uint8_t next_idx = global_context.active_speed_idx.load(std::memory_order_acquire) ^ 1;
+                global_context.speed_buffer[next_idx] = speed;
+                global_context.active_speed_idx.store(next_idx, std::memory_order_release);
             }
 
             vTaskDelayUntil(&from, interval);
@@ -63,13 +65,14 @@ void obd2Setup(void*)
     vTaskDelete(NULL);
 }
 
-void trackerSetup(void*)
+void trackerSetup(void* param)
 {
     {
+        IModel* model = static_cast<IModel*>(param);
         constexpr auto frequency = IMUConfig::SAMPLE_RATE_HZ;
         constexpr uint64_t loop_time = 1000000 / frequency;
 
-        auto instance = Tracker(frequency);
+        auto instance = Tracker(model, frequency);
 
         tracker_sem = xSemaphoreCreateBinary();
 
@@ -98,9 +101,26 @@ void setup()
         nvs_flash_init();
     }
 
+    // ── Профиль устройства (Car или Bike) ────────────────────
+    static CurrentDevice device;
+    ESP_LOGI("MAIN", "Target device: %s", device.name());
+
+    // ── Модели: одновременная работа ESKF и SD-логгера ──────
+    auto* log_model = new LogModel();
+    if (!log_model->begin()) {
+        ESP_LOGW("MAIN", "SD logger init failed — proceeding without SD recording");
+    }
+
+    auto* eskf_model = new BicycleESKF(device.getModelParams());
+
+    // CompositeModel дублирует все события (IMU, Скорость, GPS) в обе модели:
+    // eskf_model  — вычисляет перемещение (DeltaS) и фильтр Калмана
+    // log_model   — асинхронно пишет сырую телеметрию в фоновом таске на Core 0
+    static IModel* model = new CompositeModel(eskf_model, log_model);
+
     xTaskCreatePinnedToCore(bluetoothSetup, "bluetooth", TaskConfig::BLE_STACK, nullptr, TaskConfig::BLE_PRIO, nullptr, TaskConfig::BLE_CORE);
-    xTaskCreatePinnedToCore(obd2Setup, "obd2", TaskConfig::CAN_STACK, nullptr, TaskConfig::CAN_PRIO, nullptr, TaskConfig::CAN_CORE);
-    xTaskCreatePinnedToCore(trackerSetup, "tracker", TaskConfig::IMU_STACK, nullptr, TaskConfig::IMU_PRIO, nullptr, TaskConfig::IMU_CORE);
+    xTaskCreatePinnedToCore(speedSetup, "speed", TaskConfig::CAN_STACK, device.getSpeedSource(), TaskConfig::CAN_PRIO, nullptr, TaskConfig::CAN_CORE);
+    xTaskCreatePinnedToCore(trackerSetup, "tracker", TaskConfig::IMU_STACK, model, TaskConfig::IMU_PRIO, nullptr, TaskConfig::IMU_CORE);
 }
 
 void loop()

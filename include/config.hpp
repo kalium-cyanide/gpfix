@@ -13,6 +13,7 @@ struct PinConfig {
     config__ int32_t CAN_RX_PIN = 4;
 
     config__ int32_t BTN1_PIN = 6;
+    config__ int32_t HALL_PIN = 6; // Пин D0 датчика Холла на велосипеде
     config__ int32_t BTN2_PIN = 7;
 
     config__ int32_t SD_MOSI = 11;
@@ -58,6 +59,13 @@ struct CANConfig {
     config__ uint32_t RX_TIMEOUT_MS = 100;
 };
 
+struct BikeConfig {
+    config__ float WHEEL_CIRCUMFERENCE_M = 2.150f; // Окружность колеса (м) (26"-28" колесо)
+    config__ uint32_t HALL_TIMEOUT_US = 3000000UL; // 3 секунды до полного 0 км/ч
+    config__ uint32_t HALL_DEBOUNCE_US = 60000UL;  // 60 мс антидребезг (до ~129 км/ч)
+    config__ uint32_t POLL_INTERVAL_MS = 50;       // Частота обновления скорости 20 Гц
+};
+
 struct SDConfig {
     config__ uint32_t SPI_FREQ = 20000000;
     config__ uint32_t QUEUE_SIZE = 512;
@@ -73,7 +81,7 @@ struct TaskConfig {
     config__ uint8_t IMU_CORE = 1;
     config__ uint8_t BLE_CORE = 0;
     config__ uint8_t CAN_CORE = 0;
-    config__ uint32_t IMU_STACK = 8192;
+    config__ uint32_t IMU_STACK = 16384;
     config__ uint32_t BLE_STACK = 4096;
     config__ uint32_t CAN_STACK = 4096;
     config__ uint32_t IMU_PRIO = 10;
