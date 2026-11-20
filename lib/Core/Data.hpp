@@ -6,21 +6,13 @@
 #pragma pack(push, 1)
 
 struct IMURaw {
-    int16_t ax;
-    int16_t ay;
-    int16_t az;
-    int16_t gx;
-    int16_t gy;
-    int16_t gz;
+    int16_t ax, ay, az;
+    int16_t gx, gy, gz;
 };
 
 struct IMUData {
-    float acc_x;
-    float acc_y;
-    float acc_z;
-    float gyro_x;
-    float gyro_y;
-    float gyro_z;
+    float acc_x, acc_y, acc_z;
+    float gyro_x, gyro_y, gyro_z;
     uint64_t timestamp_us;
 };
 
@@ -30,11 +22,10 @@ struct SpeedData {
     bool valid;
 };
 
-using CANData = SpeedData; // Совместимость со старым кодом
+using CANData = SpeedData;
 
 struct GPSData {
-    double lat;
-    double lon;
+    double lat, lon;
     bool valid;
 };
 
@@ -48,16 +39,17 @@ struct DeltaS {
 
 #pragma pack(pop)
 
+// ── Контекст межзадачного обмена (lock-free двойная буферизация) ──
+
 struct Context {
-    DeltaS delta_buffer[2];
-    GPSData gps_buffer[2];
+    DeltaS    delta_buffer[2];
+    GPSData   gps_buffer[2];
     SpeedData speed_buffer[2];
-    #define can_buffer speed_buffer
 
     std::atomic<uint8_t> active_delta_idx { 0 };
-    std::atomic<uint8_t> active_gps_idx { 0 };
+    std::atomic<uint8_t> active_gps_idx   { 0 };
     std::atomic<uint8_t> active_speed_idx { 0 };
-    #define active_can_idx active_speed_idx
+    std::atomic<bool>    ble_connected    { false };
 };
 
 extern Context global_context;
