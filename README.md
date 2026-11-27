@@ -22,12 +22,6 @@ sudo dnf install python3 python3-pip curl
 python3 -c "$(curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py)"
 ```
 
-Для сборки:
-
-```bash
-pio run -e bike 
-```
-env можно выбрать из {bike, car}
 
 Добавляем в path
 
@@ -35,6 +29,13 @@ env можно выбрать из {bike, car}
 echo 'export PATH="$PATH:$HOME/.platformio/penv/bin"' >> ~/.bashrc
 source ~/.bashrc
 ```
+
+Для сборки:
+
+```bash
+pio run -e bike 
+```
+env можно выбрать из {bike, car}
 
 Для прошивки:
 

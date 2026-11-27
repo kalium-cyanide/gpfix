@@ -71,6 +71,11 @@ struct LogModel : IModel {
 
     bool begin()
     {
+        if (!SDConfig::ENABLED) {
+            ESP_LOGI("SDLOG", "SD logger is disabled in Config.hpp (SDConfig::ENABLED == false)");
+            return false;
+        }
+
         sd_spi.begin(PinConfig::SD_SCK, PinConfig::SD_MISO,
                      PinConfig::SD_MOSI, PinConfig::SD_CS);
 

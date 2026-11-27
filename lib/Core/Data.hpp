@@ -39,8 +39,6 @@ struct DeltaS {
 
 #pragma pack(pop)
 
-// ── Контекст межзадачного обмена (lock-free двойная буферизация) ──
-
 struct Context {
     DeltaS    delta_buffer[2];
     GPSData   gps_buffer[2];

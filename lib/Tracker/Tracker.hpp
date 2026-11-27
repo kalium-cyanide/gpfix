@@ -36,18 +36,32 @@ struct Tracker {
 
     Tracker(IModel* m, float frequency) : model(m)
     {
-        imu.begin();
-        imu.calibrate();
+        if (imu.begin()) {
+            imu.calibrate();
+        } else {
+            ESP_LOGW("TRACKER", "BMI160 not ready on startup — will retry in background");
+        }
         filter.begin(frequency);
         window_start = static_cast<uint64_t>(esp_timer_get_time());
     }
 
     void loop()
     {
+        if (!imu.isAvailable()) {
+            static uint32_t retry_counter = 0;
+            if (++retry_counter % static_cast<uint32_t>(IMUConfig::SAMPLE_RATE_HZ) == 0) {
+                if (imu.begin()) {
+                    imu.calibrate();
+                }
+            }
+        }
+
         IMUData d = imu.read();
 
-        filter.updateIMU(d.gyro_x, d.gyro_y, d.gyro_z,
-                         d.acc_x,  d.acc_y,  d.acc_z);
+        if (imu.isAvailable()) {
+            filter.updateIMU(d.gyro_x, d.gyro_y, d.gyro_z,
+                             d.acc_x,  d.acc_y,  d.acc_z);
+        }
 
         // Скорость → модель
         uint8_t si = global_context.active_speed_idx.load(std::memory_order_acquire);

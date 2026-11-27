@@ -50,13 +50,18 @@ struct TestModel : public IModel {
         gx = imu.gyro_x; gy = imu.gyro_y; gz = imu.gyro_z;
         a_norm = std::sqrt(ax*ax + ay*ay + az*az);
 
-        // 1. Автокалибровка вертикали
-        if (!is_leveled || speed_kmh < 0.2f) {
-            acc_accum += Eigen::Vector3f(ax, ay, az);
-            level_samples++;
-            if (level_samples >= 50) {
-                float norm = acc_accum.norm();
-                if (norm > 1.0f) { u_z = acc_accum / norm; is_leveled = true; }
+        // 1. Автокалибровка вертикали (только при реалистичной гравитации 6..14 м/с²)
+        if (a_norm > 6.0f && a_norm < 14.0f) {
+            if (!is_leveled || speed_kmh < 0.2f) {
+                acc_accum += Eigen::Vector3f(ax, ay, az);
+                level_samples++;
+                if (level_samples >= 50) {
+                    float norm = acc_accum.norm();
+                    if (norm > 50.0f * 6.0f) {
+                        u_z = acc_accum / norm;
+                        is_leveled = true;
+                    }
+                }
             }
         }
 

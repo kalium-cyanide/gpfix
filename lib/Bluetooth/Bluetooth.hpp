@@ -68,8 +68,10 @@ struct Bluetooth {
 
     Bluetooth() : server_cb(connected)
     {
-        BLEDevice::init(BTConfig::DEVICE_NAME);
-        BLEDevice::setMTU(BTConfig::MTU_SIZE);
+        if (!BLEDevice::getInitialized()) {
+            BLEDevice::init(BTConfig::DEVICE_NAME);
+            BLEDevice::setMTU(BTConfig::MTU_SIZE);
+        }
 
         server = BLEDevice::createServer();
         server->setCallbacks(&server_cb);
@@ -107,6 +109,7 @@ struct Bluetooth {
         msg.timeTo   = ds.time_to_us;
         msg.deltaX   = ds.dx_m;
         msg.deltaY   = ds.dy_m;
+        msg.yaw      = ds.yaw;
 
         uint8_t buf[64];
         pb_ostream_t stream = pb_ostream_from_buffer(buf, sizeof(buf));

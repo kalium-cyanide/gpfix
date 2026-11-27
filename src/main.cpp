@@ -1,15 +1,16 @@
+#include "BicycleESKF.hpp"
 #include "Bluetooth.hpp"
 #include "Config.hpp"
 #include "Device.hpp"
 #include "Display.hpp"
 #include "I2CBus.hpp"
 #include "LogModel.hpp"
-#include "TestModel.hpp"
 #include "Tracker.hpp"
 #include "esp_timer.h"
 #include "nvs_flash.h"
 
 #if defined(DEVICE_BIKE)
+#include "CycplusSpeed.hpp"
 #include "HallSpeed.hpp"
 #endif
 
@@ -64,8 +65,8 @@ static void speedTask(void* param)
 
 static void oledTask(void* param)
 {
-    auto* tm = static_cast<TestModel*>(param);
-    Display display;
+    auto* eskf = static_cast<BicycleESKF*>(param);
+    static Display display;
     while (!display.begin())
         vTaskDelay(pdMS_TO_TICKS(1000));
 
@@ -74,35 +75,54 @@ static void oledTask(void* param)
 
     for (;;) {
         bool ble = global_context.ble_connected.load(std::memory_order_relaxed);
-        snprintf(l1, sizeof(l1), "GPFix TEST  BT:%s", ble ? "OK" : "--");
+        snprintf(l1, sizeof(l1), "GPFix ESKF  BT:%s", ble ? "OK" : "--");
 
-        bool sd = global_log && global_log->isReady();
-        snprintf(l2, sizeof(l2), "SD:%s R:%lu D:%lu",
-            sd ? "REC" : "ERR",
-            static_cast<unsigned long>(global_log ? global_log->records_written : 0),
-            static_cast<unsigned long>(global_log ? global_log->records_dropped.load() : 0));
+        if (!SDConfig::ENABLED) {
+            snprintf(l2, sizeof(l2), "SD:OFF (No HW)");
+        } else {
+            bool sd = global_log && global_log->isReady();
+            snprintf(l2, sizeof(l2), "SD:%s R:%lu D:%lu",
+                sd ? "REC" : "ERR",
+                static_cast<unsigned long>(global_log ? global_log->records_written : 0),
+                static_cast<unsigned long>(global_log ? global_log->records_dropped.load() : 0));
+        }
 
 #if defined(DEVICE_BIKE)
-        uint32_t pulses = HallSpeed::hallPulseCount;
+        uint32_t pulses = BikeConfig::USE_BLE_SPEED
+            ? CycplusSpeed::wheelRevs.load(std::memory_order_relaxed)
+            : HallSpeed::hallPulseCount;
 #else
-        uint32_t pulses = tm->pulse_count;
+        uint32_t pulses = 0;
 #endif
-        snprintf(l3, sizeof(l3), "Spd:%.1fkm/h P:%lu",
-            tm->speed_kmh, static_cast<unsigned long>(pulses));
+        snprintf(l3, sizeof(l3), "Spd:%.1f P:%lu",
+            eskf->X(3) * 3.6f, static_cast<unsigned long>(pulses));
 
-        snprintf(l4, sizeof(l4), "G:%.2f %.2f %.2f",
-            tm->u_z(0), tm->u_z(1), tm->u_z(2));
+        if (eskf->is_leveled) {
+            snprintf(l4, sizeof(l4), "G:%.1f %.1f %.1f",
+                eskf->u_z(0), eskf->u_z(1), eskf->u_z(2));
+            snprintf(l5, sizeof(l5), "Y:%.0f\xb0 %s",
+                eskf->X(2) * RAD2DEG_F,
+                !eskf->is_fwd_calibrated ? "FWD?" : (eskf->isDR() ? "DR" : "OK"));
+        } else {
+            snprintf(l4, sizeof(l4), "G:WAIT IMU (LVL)");
+            snprintf(l5, sizeof(l5), "Y:%.0f\xb0 CAL", eskf->X(2) * RAD2DEG_F);
+        }
 
-        snprintf(l5, sizeof(l5), "Y:%.0f\xb0 W:%.1f\xb0/s %s",
-            tm->current_yaw_deg, tm->w_proj,
-            tm->is_leveled ? "OK" : "CAL");
-
-        if (tm->gps_valid)
-            snprintf(l6, sizeof(l6), "GPS:%.4f,%.4f", tm->gps_lat, tm->gps_lon);
+        GPSData gps = global_context.gps_buffer[global_context.active_gps_idx.load(std::memory_order_acquire)];
+        if (gps.valid)
+            snprintf(l6, sizeof(l6), "GPS:%.4f,%.4f", gps.lat, gps.lon);
         else
             snprintf(l6, sizeof(l6), "GPS: Wait phone");
 
-        display.render(l1, l2, l3, l4, l5, l6);
+        // Стрелка показывает откалиброванную продольную ось u_x ("куда смотрит нос велика" в СК платы)
+        float arrow_ux = eskf->u_x(0);
+        float arrow_uy = -eskf->u_x(1);
+        if (std::hypot(arrow_ux, arrow_uy) < 0.2f) {
+            arrow_uy = -eskf->u_x(2);
+        }
+        const char* ph = eskf->is_leveled ? "GO" : "?";
+
+        display.render(l1, l2, l3, l4, l5, l6, eskf->is_fwd_calibrated, arrow_ux, arrow_uy, ph);
         vTaskDelayUntil(&from, pdMS_TO_TICKS(250));
     }
 }
@@ -136,6 +156,7 @@ static void trackerTask(void* param)
 void setup()
 {
     I2CBus::init();
+    I2CBus::scan();
 
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -146,20 +167,30 @@ void setup()
     static CurrentDevice device;
     ESP_LOGI("MAIN", "Device: %s", device.name());
 
+    if (!BLEDevice::getInitialized()) {
+        BLEDevice::init(BTConfig::DEVICE_NAME);
+        BLEDevice::setMTU(BTConfig::MTU_SIZE);
+    }
+
     // ── Модели ───────────────────────────────────────────────
-    auto* test_model = new TestModel();
-
-    auto* log_model = new LogModel();
+    auto* eskf_model = new BicycleESKF(device.getModelParams());
+    auto* log_model  = new LogModel();
     global_log = log_model;
-    if (!log_model->begin())
-        ESP_LOGW("MAIN", "SD logger init failed");
 
-    static auto* model = new CompositeModel(test_model, log_model);
+    if constexpr (SDConfig::ENABLED) {
+        if (!log_model->begin()) {
+            ESP_LOGW("MAIN", "SD logger init failed — proceeding without SD recording");
+        }
+    } else {
+        ESP_LOGI("MAIN", "SD logger disabled by configuration");
+    }
+
+    static auto* model = new CompositeModel(eskf_model, log_model);
 
     // ── Задачи ───────────────────────────────────────────────
     xTaskCreatePinnedToCore(bluetoothTask, "bt", TaskConfig::BLE_STACK, nullptr, TaskConfig::BLE_PRIO, nullptr, TaskConfig::BLE_CORE);
     xTaskCreatePinnedToCore(speedTask, "speed", TaskConfig::CAN_STACK, device.getSpeedSource(), TaskConfig::CAN_PRIO, nullptr, TaskConfig::CAN_CORE);
-    xTaskCreatePinnedToCore(oledTask, "oled", 4096, test_model, 1, nullptr, 0);
+    xTaskCreatePinnedToCore(oledTask, "oled", 4096, eskf_model, 1, nullptr, 0);
     xTaskCreatePinnedToCore(trackerTask, "tracker", TaskConfig::IMU_STACK, model, TaskConfig::IMU_PRIO, nullptr, TaskConfig::IMU_CORE);
 }
 

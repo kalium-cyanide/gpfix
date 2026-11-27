@@ -41,12 +41,12 @@ struct IMUConfig {
 
 struct BTConfig {
     config__ const char* DEVICE_NAME    = "GPFix";
-    config__ const char* SERVICE_UUID   = "";
-    config__ const char* DELTA_CHAR_UUID = "";
-    config__ const char* ACK_CHAR_UUID  = "";
+    config__ const char* SERVICE_UUID   = "0000aaaa-0000-1000-8000-00805f9b34fb";
+    config__ const char* DELTA_CHAR_UUID = "0000aaab-0000-1000-8000-00805f9b34fb";
+    config__ const char* ACK_CHAR_UUID  = "0000aaac-0000-1000-8000-00805f9b34fb";
     config__ uint16_t NOTIFY_INTERVAL_MS = 50;
     config__ uint32_t FREQUENCY          = 20;
-    config__ uint16_t MTU_SIZE           = 128;
+    config__ uint16_t MTU_SIZE           = 185;
 };
 
 struct CANConfig {
@@ -59,13 +59,16 @@ struct CANConfig {
 };
 
 struct BikeConfig {
-    config__ float    WHEEL_CIRCUMFERENCE_M = 2.150f;
-    config__ uint32_t HALL_TIMEOUT_US       = 3000000UL;
-    config__ uint32_t HALL_DEBOUNCE_US      = 60000UL;
-    config__ uint32_t POLL_INTERVAL_MS      = 50;
+    config__ bool        USE_BLE_SPEED         = true;               // true = CYCPLUS C3 (BLE CSC), false = HallSpeed
+    config__ const char* CSC_DEVICE_NAME       = "CYCPLUS C3 15481";
+    config__ float       WHEEL_CIRCUMFERENCE_M = 2.150f;
+    config__ uint32_t    HALL_TIMEOUT_US       = 3000000UL;
+    config__ uint32_t    HALL_DEBOUNCE_US      = 60000UL;
+    config__ uint32_t    POLL_INTERVAL_MS      = 50;
 };
 
 struct SDConfig {
+    config__ bool     ENABLED        = false;  // false, если модуль SD-карты не распаян
     config__ uint32_t SPI_FREQ       = 20000000;
     config__ uint32_t QUEUE_SIZE     = 512;
     config__ uint32_t WRITE_BATCH    = 32;
@@ -82,7 +85,7 @@ struct TaskConfig {
     config__ uint8_t  CAN_CORE  = 0;
     config__ uint32_t IMU_STACK = 16384;
     config__ uint32_t BLE_STACK = 4096;
-    config__ uint32_t CAN_STACK = 4096;
+    config__ uint32_t CAN_STACK = 6144;
     config__ uint32_t IMU_PRIO  = 10;
     config__ uint32_t BLE_PRIO  = 2;
     config__ uint32_t CAN_PRIO  = 3;

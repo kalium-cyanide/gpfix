@@ -1,16 +1,24 @@
 #pragma once
 
 #include "BicycleESKF.hpp"
+#include "Config.hpp"
+#include "CycplusSpeed.hpp"
 #include "HallSpeed.hpp"
 
 // ── Профиль устройства: Велосипед ────────────────────────────
 
 struct BikeDevice {
-    HallSpeed speed_sensor;
+    CycplusSpeed ble_speed_sensor;
+    HallSpeed    hall_speed_sensor;
 
     const char* name() const { return "Bike"; }
 
-    ISpeedSource* getSpeedSource() { return &speed_sensor; }
+    ISpeedSource* getSpeedSource()
+    {
+        return BikeConfig::USE_BLE_SPEED
+            ? static_cast<ISpeedSource*>(&ble_speed_sensor)
+            : static_cast<ISpeedSource*>(&hall_speed_sensor);
+    }
 
     ESKFParams getModelParams() const
     {

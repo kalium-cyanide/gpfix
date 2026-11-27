@@ -19,8 +19,34 @@ struct I2CBus {
                      uint32_t freq = 400000)
     {
         mutex_ = xSemaphoreCreateMutex();
+#if defined(PIN_I2C_POWER)
+        // Включение питания I2C / STEMMA QT на платах Adafruit Feather
+        pinMode(PIN_I2C_POWER, OUTPUT);
+        digitalWrite(PIN_I2C_POWER, HIGH);
+        delay(10);
+#endif
         Wire.begin(sda, scl);
         Wire.setClock(freq);
+    }
+
+    static void scan()
+    {
+        Lock lock;
+        ESP_LOGI("I2C", "Scanning I2C bus (SDA=%d, SCL=%d)...", PinConfig::SDA_PIN, PinConfig::SCL_PIN);
+        uint8_t count = 0;
+        for (uint8_t addr = 1; addr < 127; addr++) {
+            Wire.beginTransmission(addr);
+            if (Wire.endTransmission() == 0) {
+                ESP_LOGI("I2C", " -> Found device at 0x%02X", addr);
+                count++;
+            }
+        }
+        if (count == 0) {
+            ESP_LOGE("I2C", "No I2C devices responding! Check SDA=%d, SCL=%d, VCC, GND",
+                     PinConfig::SDA_PIN, PinConfig::SCL_PIN);
+        } else {
+            ESP_LOGI("I2C", "Total devices responding: %d", count);
+        }
     }
 
     struct Lock {
